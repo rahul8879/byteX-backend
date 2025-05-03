@@ -17,10 +17,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import local modules
-from api.database import SessionLocal, engine, Base
-import api.models as models
-import api.schemas as schemas
-from api.twilio_service import send_otp, verify_otp
+from database import SessionLocal, engine, Base
+import models as models
+import schemas as schemas
+from twilio_service import send_otp, verify_otp
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

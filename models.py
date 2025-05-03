@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
-from api.database import Base
+from database import Base
 
 class Registration(Base):
     """Model for storing basic user registrations (interest in the course)"""
