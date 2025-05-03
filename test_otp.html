@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+        }
+        .otp-container {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .otp-input {
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            font-size: 18px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>OTP Test Page</h1>
+    
+    <div class="container">
+        <h2>Send OTP</h2>
+        <div class="form-group">
+            <label for="countryCode">Country Code</label>
+            <select id="countryCode">
+                <option value="+91">+91 (India)</option>
+                <option value="+1">+1 (USA/Canada)</option>
+                <option value="+44">+44 (UK)</option>
+                <option value="+61">+61 (Australia)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="phoneNumber">Phone Number</label>
+            <input type="text" id="phoneNumber" placeholder="Enter phone number without country code">
+        </div>
+        <button id="sendOtpBtn">Send OTP</button>
+        
+        <div id="otpSection" style="display: none; margin-top: 20px;">
+            <h3>Enter OTP</h3>
+            <div class="otp-container">
+                <input type="text" maxlength="1" class="otp-input" id="otp1">
+                <input type="text" maxlength="1" class="otp-input" id="otp2">
+                <input type="text" maxlength="1" class="otp-input" id="otp3">
+                <input type="text" maxlength="1" class="otp-input" id="otp4">
+                <input type="text" maxlength="1" class="otp-input" id="otp5">
+                <input type="text" maxlength="1" class="otp-input" id="otp6">
+            </div>
+            <button id="verifyOtpBtn" style="margin-top: 10px;">Verify OTP</button>
+        </div>
+        
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        // API base URL - change this to match your backend
+        const API_BASE_URL = 'http://localhost:8000/api';
+        
+        // DOM elements
+        const sendOtpBtn = document.getElementById('sendOtpBtn');
+        const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+        const otpSection = document.getElementById('otpSection');
+        const resultDiv = document.getElementById('result');
+        const otpInputs = Array.from(document.querySelectorAll('.otp-input'));
+        
+        // Send OTP
+        sendOtpBtn.addEventListener('click', async () => {
+            const countryCode = document.getElementById('countryCode').value;
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            
+            if (!phoneNumber) {
+                showResult('Please enter a phone number', false);
+                return;
+            }
+            
+            sendOtpBtn.disabled = true;
+            sendOtpBtn.textContent = 'Sending...';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/send-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone: phoneNumber,
+                        country_code: countryCode
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('OTP sent successfully! Check your phone.', true);
+                    otpSection.style.display = 'block';
+                    otpInputs[0].focus();
+                } else {
+                    showResult(`Failed to send OTP: ${data.detail || 'Unknown error'}`, false);
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, false);
+            } finally {
+                sendOtpBtn.disabled = false;
+                sendOtpBtn.textContent = 'Send OTP';
+            }
+        });
+        
+        // Handle OTP input
+        otpInputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                if (e.target.value.length === 1) {
+                    if (index < otpInputs.length - 1) {
+                        otpInputs[index + 1].focus();
+                    }
+                }
+            });
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                    otpInputs[index - 1].focus();
+                }
+            });
+        });
+        
+        // Verify OTP
+        verifyOtpBtn.addEventListener('click', async () => {
+            const countryCode = document.getElementById('countryCode').value;
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const otp = otpInputs.map(input => input.value).join('');
+            
+            if (otp.length !== 6) {
+                showResult('Please enter a valid 6-digit OTP', false);
+                return;
+            }
+            
+            verifyOtpBtn.disabled = true;
+            verifyOtpBtn.textContent = 'Verifying...';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/verify-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone: phoneNumber,
+                        country_code: countryCode,
+                        otp: otp
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('OTP verified successfully!', true);
+                } else {
+                    showResult(`Failed to verify OTP: ${data.detail || 'Unknown error'}`, false);
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, false);
+            } finally {
+                verifyOtpBtn.disabled = false;
+                verifyOtpBtn.textContent = 'Verify OTP';
+            }
+        });
+        
+        // Helper function to show result
+        function showResult(message, isSuccess) {
+            resultDiv.textContent = message;
+            resultDiv.className = `result ${isSuccess ? 'success' : 'error'}`;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
