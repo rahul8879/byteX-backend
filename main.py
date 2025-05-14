@@ -169,7 +169,7 @@ async def enroll_user(
 async def get_curriculum():
     """Return the curriculum PDF"""
     # Path to the PDF file and make more secure
-    pdf_path = "static/RByte.ai – AI Engineering Professional Program.pdf"
+    pdf_path = "static/RByte.ai – AI Engineering Professional Program (3).pdf"
     
     # Check if file exists
     if not os.path.isfile(pdf_path):
