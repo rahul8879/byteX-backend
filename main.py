@@ -203,6 +203,7 @@ async def register_for_masterclass(
     db.add(db_masterclass)
     db.commit()
     db.refresh(db_masterclass)
+    send_sms_to_owner(masterclass.name, masterclass.phone, masterclass.email)
     
     return {"success": True, "message": "Masterclass registration successful", "id": db_masterclass.id}
 
