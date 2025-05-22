@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from database import SessionLocal, engine, Base
 import models as models
 import schemas as schemas
-from twilio_service import send_otp, verify_otp
+from twilio_service import send_otp, send_sms_to_owner
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -135,6 +135,7 @@ async def register_user(
     db.add(db_registration)
     db.commit()
     db.refresh(db_registration)
+    send_sms_to_owner(registration.name, registration.phone, registration.email)
     
     return {"success": True, "message": "Registration successful", "id": db_registration.id}
 
@@ -162,6 +163,8 @@ async def enroll_user(
     db.add(db_enrollment)
     db.commit()
     db.refresh(db_enrollment)
+    send_sms_to_owner(enrollment.name, enrollment.phone, enrollment.email)
+
     
     return {"success": True, "message": "Enrollment successful", "id": db_enrollment.id}
 

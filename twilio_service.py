@@ -80,3 +80,34 @@ def verify_otp(phone_number: str, otp: str):
     In this implementation, the actual verification is done in the API endpoint.
     """
     pass
+
+
+def send_sms_to_owner(name: str, phone: str, email: str):
+    # Load credentials from environment
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+    owner_phone = "+919152091676"  # Your personal mobile
+
+    if not all([account_sid, auth_token, twilio_phone, owner_phone]):
+        raise ValueError("Missing one or more Twilio environment variables.")
+
+    # Initialize Twilio client
+    client = Client(account_sid, auth_token)
+
+    # Compose and send message
+    message_body = f"""
+    📣 New Masterclass Registration
+
+    👤 Name: {name}
+    📞 Phone: {phone}
+    📧 Email: {email}
+    """
+
+    message = client.messages.create(
+        body=message_body,
+        from_=twilio_phone,
+        to=owner_phone
+    )
+
+    return message.sid  # Optional: useful for logging
