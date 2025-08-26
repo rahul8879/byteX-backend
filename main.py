@@ -27,7 +27,8 @@ Base.metadata.create_all(bind=engine)
 
 # Load environment variables
 load_dotenv()
-
+print("Environment variables loaded.")
+print(f"TWILIO_ACCOUNT_SID: {os.getenv('TWILIO_ACCOUNT_SID')}")
 app = FastAPI(title="RByte.ai API", description="Backend API for RByte.ai AI Engineering Course")
 
 # Configure CORS

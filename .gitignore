@@ -1,3 +1,4 @@
 .vercel
 .env
 /byte-env
+/__pycache__/
