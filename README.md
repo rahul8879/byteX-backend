@@ -27,7 +27,7 @@ This is the backend API for the RByte.ai AI Engineering Course website.
 
 3. Run the server:
    \`\`\`
-   python run.py
+   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
    \`\`\`
 
 4. Access the API documentation at:
@@ -43,6 +43,12 @@ This is the backend API for the RByte.ai AI Engineering Course website.
 - `POST /api/enroll`: Enroll in the course
 - `GET /api/curriculum`: Download curriculum PDF
 - `POST /api/masterclass-register`: Register for a masterclass
+ - `GET /health`: Liveness probe
+ - `GET /ready`: Readiness (DB connectivity)
+
+Notes:
+- OTP sending is rate limited: max 1/min and 3/hour per phone.
+- Owner notifications require `OWNER_PHONE` in the environment.
 
 ## Database
 

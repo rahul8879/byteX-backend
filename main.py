@@ -25,11 +25,13 @@ from twilio_service import send_otp, send_sms_to_owner
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
-# Load environment variables
+# Load environment variables (avoid printing secrets)
 load_dotenv()
-print("Environment variables loaded.")
-print(f"TWILIO_ACCOUNT_SID: {os.getenv('TWILIO_ACCOUNT_SID')}")
-app = FastAPI(title="RByte.ai API", description="Backend API for RByte.ai AI Engineering Course")
+app = FastAPI(
+    title="RByte.ai API",
+    description="Backend API for RByte.ai AI Engineering Course",
+    version="1.0.0"
+)
 
 # Configure CORS
 app.add_middleware(
@@ -52,11 +54,33 @@ def get_db():
 # In-memory OTP storage (in production, use Redis or another persistent store)
 otp_store = {}
 
-@app.get("/")
+# Simple in-memory rate limiting for OTPs
+# Structure: { phone: {"last_sent": datetime, "window_start": datetime, "count": int} }
+otp_rate_limit: dict = {}
+OTP_MIN_INTERVAL_SECONDS = 60  # at most 1 OTP per 60s per phone
+OTP_WINDOW_SECONDS = 3600       # 1 hour window
+OTP_MAX_PER_WINDOW = 3          # at most 3 OTPs per hour
+
+@app.get("/", tags=["Meta"])
 def read_root():
     return {"message": "Welcome to RByte.ai API"}
 
-@app.post("/api/send-otp", response_model=schemas.OTPResponse)
+@app.get("/health", tags=["Meta"])
+def health():
+    return {"status": "ok"}
+
+@app.get("/ready", tags=["Meta"])
+def readiness():
+    # Basic readiness: DB connectivity check
+    try:
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        return {"status": "ready"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Not ready: {str(e)}")
+
+@app.post("/api/send-otp", response_model=schemas.OTPResponse, tags=["Auth"])
 async def send_otp_endpoint(phone_data: schemas.PhoneNumber):
     """Send OTP to the provided phone number using Twilio"""
     phone = phone_data.phone
@@ -65,6 +89,24 @@ async def send_otp_endpoint(phone_data: schemas.PhoneNumber):
     # Format phone number for Twilio
     formatted_phone = f"{country_code}{phone}"
     
+    # Rate limiting checks
+    now = datetime.now()
+    rl = otp_rate_limit.get(formatted_phone)
+
+    if rl:
+        # Enforce minimum interval between OTPs
+        if rl.get("last_sent") and (now - rl["last_sent"]).total_seconds() < OTP_MIN_INTERVAL_SECONDS:
+            raise HTTPException(status_code=429, detail="OTP recently sent. Please wait before requesting another.")
+        # Enforce window-based limit
+        window_start = rl.get("window_start", now)
+        if (now - window_start).total_seconds() > OTP_WINDOW_SECONDS:
+            # Reset window
+            rl = {"window_start": now, "count": 0}
+        elif rl.get("count", 0) >= OTP_MAX_PER_WINDOW:
+            raise HTTPException(status_code=429, detail="Too many OTP requests. Try again later.")
+    else:
+        rl = {"window_start": now, "count": 0}
+
     # Generate a 6-digit OTP
     otp = ''.join(random.choices(string.digits, k=6))
     
@@ -78,12 +120,16 @@ async def send_otp_endpoint(phone_data: schemas.PhoneNumber):
             "expires_at": datetime.now() + timedelta(minutes=5)
         }
         
-        logger.info(f"OTP sent to {formatted_phone}: {otp}")
+        logger.info(f"OTP sent to {formatted_phone}")
+        # update rate limit state
+        rl["last_sent"] = now
+        rl["count"] = rl.get("count", 0) + 1
+        otp_rate_limit[formatted_phone] = rl
         return {"success": True, "message": "OTP sent successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send OTP: {str(e)}")
 
-@app.post("/api/verify-otp", response_model=schemas.OTPVerificationResponse)
+@app.post("/api/verify-otp", response_model=schemas.OTPVerificationResponse, tags=["Auth"])
 async def verify_otp_endpoint(verification_data: schemas.OTPVerification):
     """Verify the OTP provided by the user"""
     phone = verification_data.phone
@@ -117,10 +163,11 @@ async def verify_otp_endpoint(verification_data: schemas.OTPVerification):
     
     return {"success": True, "message": "OTP verified successfully"}
 
-@app.post("/api/register", response_model=schemas.RegistrationResponse)
+@app.post("/api/register", response_model=schemas.RegistrationResponse, status_code=201, tags=["Leads"])
 async def register_user(
     registration: schemas.Registration,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Register a new user interested in the course"""
     # Create new registration record
@@ -136,14 +183,17 @@ async def register_user(
     db.add(db_registration)
     db.commit()
     db.refresh(db_registration)
-    send_sms_to_owner(registration.name, registration.phone, registration.email)
+    # Notify owner in background to avoid blocking the request
+    if background_tasks is not None:
+        background_tasks.add_task(send_sms_to_owner, registration.name, registration.phone, registration.email)
     
     return {"success": True, "message": "Registration successful", "id": db_registration.id}
 
-@app.post("/api/enroll", response_model=schemas.EnrollmentResponse)
+@app.post("/api/enroll", response_model=schemas.EnrollmentResponse, status_code=201, tags=["Leads"])
 async def enroll_user(
     enrollment: schemas.Enrollment,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Enroll a user in the AI Engineering course"""
     # Create new enrollment record
@@ -164,16 +214,19 @@ async def enroll_user(
     db.add(db_enrollment)
     db.commit()
     db.refresh(db_enrollment)
-    send_sms_to_owner(enrollment.name, enrollment.phone, enrollment.email)
+    if background_tasks is not None:
+        background_tasks.add_task(send_sms_to_owner, enrollment.name, enrollment.phone, enrollment.email)
 
     
     return {"success": True, "message": "Enrollment successful", "id": db_enrollment.id}
 
-@app.get("/api/curriculum", response_class=FileResponse)
+@app.get("/api/curriculum", response_class=FileResponse, tags=["Assets"])
 async def get_curriculum():
     """Return the curriculum PDF"""
     # Path to the PDF file and make more secure
-    pdf_path = "static/RByte.ai – AI Engineering Professional Program (3).pdf"
+    preferred = "static/RByte.ai – AI Engineering Professional Program (3).pdf"
+    fallback = "static/RByte.ai – AI Engineering Professional Program.pdf"
+    pdf_path = preferred if os.path.isfile(preferred) else fallback
     
     # Check if file exists
     if not os.path.isfile(pdf_path):
@@ -186,10 +239,11 @@ async def get_curriculum():
         filename="RByte.ai_AI_Engineering_Curriculum.pdf"
     )
 
-@app.post("/api/masterclass-register", response_model=schemas.MasterclassResponse)
+@app.post("/api/masterclass-register", response_model=schemas.MasterclassResponse, status_code=201, tags=["Leads"])
 async def register_for_masterclass(
     masterclass: schemas.MasterclassRegistration,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Register a user for the free masterclass"""
     # Create new masterclass registration record
@@ -204,11 +258,12 @@ async def register_for_masterclass(
     db.add(db_masterclass)
     db.commit()
     db.refresh(db_masterclass)
-    send_sms_to_owner(masterclass.name, masterclass.phone, masterclass.email)
+    if background_tasks is not None:
+        background_tasks.add_task(send_sms_to_owner, masterclass.name, masterclass.phone, masterclass.email)
     
     return {"success": True, "message": "Masterclass registration successful", "id": db_masterclass.id}
 
-@app.get("/api/test-otp/{phone}")
+@app.get("/api/test-otp/{phone}", tags=["Debug"])
 async def test_otp(phone: str, country_code: str = "+91"):
     """Test endpoint to send an OTP to a specific phone number"""
     try:
@@ -238,7 +293,7 @@ async def test_otp(phone: str, country_code: str = "+91"):
         logger.error(f"Error in test OTP: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to send test OTP: {str(e)}")
 
-@app.get("/api/debug/status")
+@app.get("/api/debug/status", tags=["Debug"])
 async def debug_status():
     """Debug endpoint to check server status and configuration"""
     try:
@@ -282,7 +337,7 @@ async def debug_status():
         }
     
 # New endpoints to fetch all registrations, enrollments, and masterclass registrations
-@app.get("/api/registrations", response_model=schemas.PaginatedResponse)
+@app.get("/api/registrations", response_model=schemas.PaginatedResponse, tags=["Admin"])
 async def get_all_registrations(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -386,7 +441,7 @@ async def get_all_enrollments(
         logger.error(f"Error fetching enrollments: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch enrollments: {str(e)}")
 
-@app.get("/api/masterclass-registrations", response_model=schemas.PaginatedResponse)
+@app.get("/api/masterclass-registrations", response_model=schemas.PaginatedResponse, tags=["Admin"])
 async def get_all_masterclass_registrations(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -438,7 +493,7 @@ async def get_all_masterclass_registrations(
         logger.error(f"Error fetching masterclass registrations: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch masterclass registrations: {str(e)}")
 
-@app.get("/api/all-leads")
+@app.get("/api/all-leads", tags=["Admin"])
 async def get_all_leads(
     db: Session = Depends(get_db)
 ):
@@ -526,7 +581,7 @@ async def get_all_leads(
         logger.error(f"Error fetching all leads: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch all leads: {str(e)}")
 
-@app.get("/api/debug/tables")
+@app.get("/api/debug/tables", tags=["Debug"])
 async def debug_tables():
     """Debug endpoint to check all tables and their record counts"""
     from debug_database import check_database_tables

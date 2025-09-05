@@ -15,6 +15,7 @@ load_dotenv()
 account_sid = os.getenv("TWILIO_ACCOUNT_SID")
 auth_token = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+owner_phone = os.getenv("OWNER_PHONE")  # optional: destination to notify on new lead
 
 # Check if credentials are set
 if not account_sid:
@@ -83,17 +84,17 @@ def verify_otp(phone_number: str, otp: str):
 
 
 def send_sms_to_owner(name: str, phone: str, email: str):
-    # Load credentials from environment
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
-    owner_phone = "+919152091676"  # Your personal mobile
+    """Notify owner about a new lead. OWNER_PHONE must be set in env."""
+    account_sid_local = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token_local = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_phone_local = os.getenv("TWILIO_PHONE_NUMBER")
+    owner_phone_local = os.getenv("OWNER_PHONE") or owner_phone
 
-    if not all([account_sid, auth_token, twilio_phone, owner_phone]):
-        raise ValueError("Missing one or more Twilio environment variables.")
+    if not all([account_sid_local, auth_token_local, twilio_phone_local, owner_phone_local]):
+        raise ValueError("Missing one or more Twilio environment variables (including OWNER_PHONE).")
 
     # Initialize Twilio client
-    client = Client(account_sid, auth_token)
+    local_client = Client(account_sid_local, auth_token_local)
 
     # Compose and send message
     message_body = f"""
@@ -104,10 +105,10 @@ def send_sms_to_owner(name: str, phone: str, email: str):
     📧 Email: {email}
     """
 
-    message = client.messages.create(
+    message = local_client.messages.create(
         body=message_body,
-        from_=twilio_phone,
-        to=owner_phone
+        from_=twilio_phone_local,
+        to=owner_phone_local
     )
 
     return message.sid  # Optional: useful for logging
