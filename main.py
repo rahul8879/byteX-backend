@@ -224,8 +224,8 @@ async def enroll_user(
 async def get_curriculum():
     """Return the curriculum PDF"""
     # Path to the PDF file and make more secure
-    preferred = "static/RByte.ai – AI Engineering Professional Program (3).pdf"
-    fallback = "static/RByte.ai – AI Engineering Professional Program.pdf"
+    preferred = "static/RByteai-AI-Engineering-Professional-Program-4.pdf"
+    fallback = "static/RByteai-AI-Engineering-Professional-Program-4.pdf"
     pdf_path = preferred if os.path.isfile(preferred) else fallback
     
     # Check if file exists
@@ -236,7 +236,7 @@ async def get_curriculum():
     return FileResponse(
         pdf_path, 
         media_type="application/pdf",
-        filename="RByte.ai_AI_Engineering_Curriculum.pdf"
+        filename="RByteai-AI-Engineering-Professional-Program-4.pdf"
     )
 
 @app.post("/api/masterclass-register", response_model=schemas.MasterclassResponse, status_code=201, tags=["Leads"])
