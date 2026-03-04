@@ -2,3 +2,5 @@
 .env
 /byte-env
 /__pycache__/
+local.settings.json
+*.db
