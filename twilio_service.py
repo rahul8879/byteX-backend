@@ -1,15 +1,17 @@
 import os
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
-from dotenv import load_dotenv
 import logging
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=None, override=False, verbose=False)
+except Exception:
+    pass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 # Twilio credentials
 account_sid = os.getenv("TWILIO_ACCOUNT_SID")
