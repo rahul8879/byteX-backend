@@ -3,11 +3,9 @@ from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 import logging
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv(dotenv_path=None, override=False, verbose=False)
-except Exception:
-    pass
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

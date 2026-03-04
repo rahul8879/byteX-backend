@@ -3,11 +3,7 @@ from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, File, Uplo
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-try:
-    from dotenv import load_dotenv as _ld
-    def load_dotenv(): _ld(dotenv_path=None, override=False, verbose=False)
-except Exception:
-    def load_dotenv(): pass
+from dotenv import load_dotenv
 from typing import Optional
 import random
 import string
